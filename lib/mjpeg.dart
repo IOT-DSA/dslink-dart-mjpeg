@@ -9,16 +9,29 @@ import "package:dslink/utils.dart" show Scheduler, Disposable;
 import "package:typed_data/typed_data.dart";
 import "package:dslink/worker.dart";
 
+import "ffmpeg.dart";
+
 class MotionJpegClient {
   final String url;
 
   MotionJpegClient(this.url);
 
   Stream<Uint8List> receive(int fps, {fpsCallback(int fps), bool enableBuffer: false}) {
-    Stream<Uint8List> stream = _receive(
-      fps,
-      fpsCallback: enableBuffer ? null : fpsCallback
-    );
+    Stream<Uint8List> stream;
+
+    if (url.startsWith("http")) {
+      stream = _receiveHttp(
+        fps,
+        fpsCallback: enableBuffer ? null : fpsCallback
+      );
+    } else if (url.startsWith("rtsp")) {
+      stream = _receiveRTSP(
+        fps,
+        fpsCallback: enableBuffer ? null : fpsCallback
+      );
+    } else {
+      stream = new Stream.empty();
+    }
 
     if (enableBuffer) {
       JpegBufferTransformer bufferTransformer = new JpegBufferTransformer();
@@ -28,7 +41,7 @@ class MotionJpegClient {
     return stream;
   }
 
-  Stream<Uint8List> _receive(int fps, {fpsCallback(int fps)}) async* {
+  Stream<Uint8List> _receiveHttp(int fps, {fpsCallback(int fps)}) async* {
     HttpClient client;
     Socket socket;
     int frames = 0;
@@ -51,10 +64,59 @@ class MotionJpegClient {
 
       var response = await request.close();
       socket = await response.detachSocket();
-      var buff = new Uint8Buffer();
-      var isInside = false;
 
-      await for (List<int> data in socket) {
+      await for (List<int> data in _getFrames(socket, fpsCallback: fpsCallback)) {
+        yield data;
+      }
+    } finally {
+      if (client != null) {
+        client.close(force: true);
+      }
+
+      if (socket != null) {
+        socket.close();
+        socket.destroy();
+      }
+
+      if (disposable != null) {
+        disposable.dispose();
+        disposable = null;
+      }
+    }
+  }
+
+  Stream<Uint8List> _receiveRTSP(int fps, {fpsCallback(int fps)}) async* {
+    var ffmpeg = new FFMPEG([
+      "-i",
+      url.replaceAll("{fps}", fps.toString()),
+      "-r",
+      "${fps}",
+      "-f",
+      "mjpeg",
+      "-"
+    ]);
+
+    await for (Uint8List data in _getFrames(ffmpeg.receive(), fpsCallback: fpsCallback)) {
+      yield data;
+    }
+  }
+
+  Stream<Uint8List> _getFrames(Stream<List<int>> stream, {
+    fpsCallback(int fps)
+  }) async* {
+    var buff = new Uint8Buffer();
+    var isInside = false;
+    int frames = 0;
+
+    Disposable disposable = Scheduler.safeEvery(const Duration(seconds: 1), () {
+      if (fpsCallback != null) {
+        fpsCallback(frames);
+        frames = 0;
+      }
+    });
+
+    try {
+      await for (List<int> data in stream) {
         var len = data.length;
         for (var i = 0; i < len; i++) {
           var b = data[i];
@@ -89,15 +151,6 @@ class MotionJpegClient {
         }
       }
     } finally {
-      if (client != null) {
-        client.close(force: true);
-      }
-
-      if (socket != null) {
-        socket.close();
-        socket.destroy();
-      }
-
       if (disposable != null) {
         disposable.dispose();
         disposable = null;

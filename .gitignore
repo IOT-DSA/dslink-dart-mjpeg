@@ -16,3 +16,4 @@ nodes.json
 .packages
 .pids
 .rtm_stub
+nodes.json.*
