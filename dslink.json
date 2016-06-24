@@ -1,0 +1,28 @@
+{
+  "name": "dslink-dart-mjpeg",
+  "version": "1.0.0",
+  "description": "Motion JPEG DSLink",
+  "main": "bin/run.dart",
+  "engines": {
+    "dart": ">=1.9.0"
+  },
+  "getDependencies": [
+    "pub get"
+  ],
+  "configs": {
+    "broker": {
+      "type": "url"
+    },
+    "name": {
+      "type": "string",
+      "default": "MJPEG"
+    },
+    "log": {
+      "type": "enum",
+      "default": "info"
+    },
+    "token": {
+      "type": "string"
+    }
+  }
+}
