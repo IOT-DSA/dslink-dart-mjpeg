@@ -15,7 +15,11 @@ class MotionJpegClient {
   MotionJpegClient(this.url);
 
   Stream<Uint8List> receive(int fps, {fpsCallback(int fps), bool enableBuffer: false}) {
-    Stream<Uint8List> stream = _receive(fps);
+    Stream<Uint8List> stream = _receive(
+      fps,
+      fpsCallback: enableBuffer ? null : fpsCallback
+    );
+
     if (enableBuffer) {
       JpegBufferTransformer bufferTransformer = new JpegBufferTransformer();
       bufferTransformer.fpsCallback = fpsCallback;
@@ -122,16 +126,26 @@ _motionJpegWorker(Worker worker) async {
   WorkerSocket socket;
   StreamController<Uint8List> controller;
 
+  updateFramesPerSecond(int fps) {
+    currentFps = fps;
+
+    if (sub != null) {
+      sub.cancel();
+    }
+
+    sub = client.receive(currentFps, fpsCallback: (int fps) async {
+      await socket.callMethod("updateFramesPerSecond", fps);
+    }, enableBuffer: enableBuffer).listen((list) {
+      controller.add(list);
+    });
+  }
+
   socket = await worker.init(methods: {
     "updateFramesPerSecond": (int fps) {
       currentFps = fps;
 
       if (sub != null) {
-        sub = client.receive(currentFps, fpsCallback: (int fps) async {
-          await socket.callMethod("updateFramesPerSecond", fps);
-        }, enableBuffer: enableBuffer).listen((list) {
-          controller.add(list);
-        });
+        updateFramesPerSecond(currentFps);
       }
     }
   });
@@ -143,11 +157,7 @@ _motionJpegWorker(Worker worker) async {
       }
 
       client = new MotionJpegClient(url);
-      sub = client.receive(currentFps, fpsCallback: (int fps) async {
-        await socket.callMethod("updateFramesPerSecond", fps);
-      }).listen((list) {
-        controller.add(list);
-      });
+      updateFramesPerSecond(currentFps);
     },
     onCancel: () {
       if (sub != null) {

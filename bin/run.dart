@@ -89,7 +89,7 @@ class AddFeedClientAction extends SimpleNode {
   }
 }
 
-const bool _useIsolate = false;
+const bool _useIsolate = true;
 
 class FeedClientNode extends SimpleNode {
   FeedClientNode(String path) : super(path);
@@ -160,7 +160,7 @@ class FeedClientNode extends SimpleNode {
             configs[r"$fps"] = number;
             link.save();
 
-            _changeFps(fps);
+            _changeFps(number);
 
             return false;
           }
@@ -179,6 +179,9 @@ class FeedClientNode extends SimpleNode {
     if (_useIsolate) {
       new Future(() async {
         _socket = await createMotionJpegWorker(url, enableBuffer: false);
+        _socket.addMethod("updateFramesPerSecond", (fps) {
+          _onFpsUpdate(fps);
+        });
       });
     }
   }
@@ -245,7 +248,7 @@ class FeedClientNode extends SimpleNode {
   }
 
   void _changeFps(int fps) {
-    if (_sub != null) {
+    if (_socket == null && _sub != null) {
       _sub.cancel();
     }
 
@@ -253,10 +256,13 @@ class FeedClientNode extends SimpleNode {
 
     if (_socket != null) {
       _socket.callMethod("updateFramesPerSecond", _currentRequestedFps);
-      _socket.createSession().then((session) {
-        _session = session;
-        session.messages.listen(_handle);
-      });
+
+      if (_session == null) {
+        _socket.createSession().then((session) {
+          _session = session;
+          _sub = session.messages.listen(_handle);
+        });
+      }
     } else {
       _sub = client.receive(
         fps,
