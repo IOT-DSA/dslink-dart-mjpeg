@@ -1,0 +1,7 @@
+name: dslink_mjpeg
+description: MJPEG DSLink
+dependencies:
+  dslink:
+    git: https://github.com/IOT-DSA/sdk-dslink-dart.git
+  typed_data: "^1.1.3"
+  image: "^1.1.26"
