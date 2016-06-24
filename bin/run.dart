@@ -90,6 +90,7 @@ class AddFeedClientAction extends SimpleNode {
 }
 
 const bool _useIsolate = true;
+const bool _enableBuffer = false;
 
 class FeedClientNode extends SimpleNode {
   FeedClientNode(String path) : super(path);
@@ -178,7 +179,7 @@ class FeedClientNode extends SimpleNode {
 
     if (_useIsolate) {
       new Future(() async {
-        _socket = await createMotionJpegWorker(url, enableBuffer: false);
+        _socket = await createMotionJpegWorker(url, enableBuffer: _enableBuffer);
         _socket.addMethod("updateFramesPerSecond", (fps) {
           _onFpsUpdate(fps);
         });
@@ -267,7 +268,7 @@ class FeedClientNode extends SimpleNode {
       _sub = client.receive(
         fps,
         fpsCallback: _onFpsUpdate,
-        enableBuffer: false
+        enableBuffer: _enableBuffer
       ).listen(_handle);
     }
   }
