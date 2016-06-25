@@ -237,12 +237,13 @@ class FeedClientNode extends SimpleNode {
         _session.close();
         _session = null;
       }
-    } else {
-      if (_sub != null) {
-        _sub.cancel();
-        _sub = null;
-      }
     }
+
+    if (_sub != null) {
+      _sub.cancel();
+      _sub = null;
+    }
+
     _receivedFrames = 0;
     _onFpsUpdate(0);
     receivedFramesNode.updateValue(0);
