@@ -120,7 +120,9 @@ class MotionJpegClient {
 
     for (String qs in uri.queryParameters.keys) {
       args.add("-${qs}");
-      args.add(uri.queryParameters[qs]);
+      if (uri.queryParameters[qs] != "true") {
+        args.add(uri.queryParameters[qs]);
+      }
     }
 
     args.addAll([
