@@ -12,20 +12,29 @@ import "package:dslink/worker.dart";
 import "ffmpeg.dart";
 
 class MotionJpegClient {
-  final String url;
+  final Uri uri;
 
-  MotionJpegClient(this.url);
+  factory MotionJpegClient(String url) {
+    return new MotionJpegClient.forUri(Uri.parse(url));
+  }
+
+  MotionJpegClient.forUri(this.uri);
 
   Stream<Uint8List> receive(int fps, {fpsCallback(int fps), bool enableBuffer: false}) {
     Stream<Uint8List> stream;
 
-    if (url.startsWith("http")) {
+    if (uri.scheme == "http" || uri.scheme == "https") {
       stream = _receiveHttp(
         fps,
         fpsCallback: enableBuffer ? null : fpsCallback
       );
-    } else if (url.startsWith("rtsp")) {
+    } else if (uri.scheme == "rtsp") {
       stream = _receiveRTSP(
+        fps,
+        fpsCallback: enableBuffer ? null : fpsCallback
+      );
+    } else if (uri.scheme == "avfoundation") {
+      stream = _receiveAVFoundation(
         fps,
         fpsCallback: enableBuffer ? null : fpsCallback
       );
@@ -56,7 +65,7 @@ class MotionJpegClient {
       client = new HttpClient();
       client.badCertificateCallback = (a, b, c) => true;
 
-      var mjpegUrl = url;
+      var mjpegUrl = uri.toString();
       mjpegUrl = mjpegUrl.replaceAll("{fps}", fps.toString());
 
       var request = await client.openUrl("GET", Uri.parse(mjpegUrl));
@@ -88,7 +97,7 @@ class MotionJpegClient {
   Stream<Uint8List> _receiveRTSP(int fps, {fpsCallback(int fps)}) async* {
     var ffmpeg = new FFMPEG([
       "-i",
-      url.replaceAll("{fps}", fps.toString()),
+      uri.toString().replaceAll("{fps}", fps.toString()),
       "-r",
       "${fps}",
       "-f",
@@ -101,8 +110,38 @@ class MotionJpegClient {
     }
   }
 
+  Stream<Uint8List> _receiveAVFoundation(int fps, {fpsCallback(int fps)}) async* {
+    String deviceName = uri.pathSegments.join(":");
+
+    var args = [
+      "-f",
+      "avfoundation"
+    ];
+
+    for (String qs in uri.queryParameters.keys) {
+      args.add("-${qs}");
+      args.add(uri.queryParameters[qs]);
+    }
+
+    args.addAll([
+      "-i",
+      deviceName,
+      "-r",
+      "${fps}",
+      "-f",
+      "mjpeg",
+      "-"
+    ]);
+
+    var ffmpeg = new FFMPEG(args);
+
+    await for (Uint8List data in _getFrames(ffmpeg.receive(), fpsCallback: fpsCallback)) {
+      yield data;
+    }
+  }
+
   Stream<Uint8List> _getFrames(Stream<List<int>> stream, {
-    fpsCallback(int fps)
+  fpsCallback(int fps)
   }) async* {
     var buff = new Uint8Buffer();
     var isInside = false;
@@ -160,7 +199,7 @@ class MotionJpegClient {
 }
 
 Future<WorkerSocket> createMotionJpegWorker(String url, {
-  bool enableBuffer: false
+bool enableBuffer: false
 }) async {
   return await createWorker(_motionJpegWorker, metadata: {
     "url": url,

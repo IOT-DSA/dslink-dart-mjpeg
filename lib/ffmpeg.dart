@@ -14,6 +14,7 @@ class FFMPEG {
 
     try {
       process = await Process.start("ffmpeg", args);
+
       await for (List<int> data in process.stdout) {
         if (data is Uint8List) {
           yield data;
