@@ -38,6 +38,11 @@ class MotionJpegClient {
         fps,
         fpsCallback: enableBuffer ? null : fpsCallback
       );
+    } else if (uri.scheme == "v4l2") {
+      stream = _receiveVideo4Linux(
+        fps,
+        fpsCallback: enableBuffer ? null : fpsCallback
+      );
     } else {
       stream = new Stream.empty();
     }
@@ -116,6 +121,38 @@ class MotionJpegClient {
     var args = [
       "-f",
       "avfoundation"
+    ];
+
+    for (String qs in uri.queryParameters.keys) {
+      args.add("-${qs}");
+      if (uri.queryParameters[qs] != "true") {
+        args.add(uri.queryParameters[qs]);
+      }
+    }
+
+    args.addAll([
+      "-i",
+      deviceName,
+      "-r",
+      "${fps}",
+      "-f",
+      "mjpeg",
+      "-"
+    ]);
+
+    var ffmpeg = new FFMPEG(args);
+
+    await for (Uint8List data in _getFrames(ffmpeg.receive(), fpsCallback: fpsCallback)) {
+      yield data;
+    }
+  }
+
+  Stream<Uint8List> _receiveVideo4Linux(int fps, {fpsCallback(int fps)}) async* {
+    String deviceName = uri.path;
+
+    var args = [
+      "-f",
+      "v4l2"
     ];
 
     for (String qs in uri.queryParameters.keys) {
