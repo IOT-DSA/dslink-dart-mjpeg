@@ -63,6 +63,11 @@ class MotionJpegClient {
         fps,
         fpsCallback: enableBuffer ? null : fpsCallback
       );
+    } else if (uri.scheme == "ffmpeg") {
+      stream = _receiveCustomFfmpeg(
+        fps,
+        fpsCallback: enableBuffer ? null : fpsCallback
+      );
     } else {
       stream = new Stream.empty();
     }
@@ -298,6 +303,22 @@ class MotionJpegClient {
       "mjpeg",
       "-"
     ]);
+
+    var ffmpeg = new FFMPEG(args);
+
+    await for (Uint8List data in _getFrames(ffmpeg.receive(), fpsCallback: fpsCallback)) {
+      yield data;
+    }
+  }
+
+  Stream<Uint8List> _receiveCustomFfmpeg(int fps, {fpsCallback(int fps)}) async* {
+    List<String> args = uri.queryParametersAll["arg"] != null ?
+      uri.queryParametersAll["arg"].toList() :
+      [];
+
+    if (args.isNotEmpty && args.last != "-") {
+      args.add("-");
+    }
 
     var ffmpeg = new FFMPEG(args);
 
