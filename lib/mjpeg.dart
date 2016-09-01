@@ -38,8 +38,28 @@ class MotionJpegClient {
         fps,
         fpsCallback: enableBuffer ? null : fpsCallback
       );
+    } else if (uri.scheme == "dshow") {
+      stream = _receiveDirectShow(
+        fps,
+        fpsCallback: enableBuffer ? null : fpsCallback
+      );
     } else if (uri.scheme == "v4l2") {
       stream = _receiveVideo4Linux(
+        fps,
+        fpsCallback: enableBuffer ? null : fpsCallback
+      );
+    } else if (uri.scheme == "gdigrab") {
+      stream = _receiveGdiGrab(
+        fps,
+        fpsCallback: enableBuffer ? null : fpsCallback
+      );
+    } else if (uri.scheme == "fbdev") {
+      stream = _receiveFbDev(
+        fps,
+        fpsCallback: enableBuffer ? null : fpsCallback
+      );
+    } else if (uri.scheme == "x11grab") {
+      stream = _receiveX11Grab(
         fps,
         fpsCallback: enableBuffer ? null : fpsCallback
       );
@@ -147,6 +167,113 @@ class MotionJpegClient {
     }
   }
 
+  Stream<Uint8List> _receiveDirectShow(int fps, {fpsCallback(int fps)}) async* {
+    String deviceName = uri.path.replaceAll(r"$", " ").toString();
+
+    var args = [
+      "-f",
+      "dshow"
+    ];
+
+    for (String qs in uri.queryParameters.keys) {
+      args.add("-${qs}");
+      if (uri.queryParameters[qs] != "true") {
+        args.add(uri.queryParameters[qs]);
+      }
+    }
+
+    args.addAll([
+      "-i",
+      'video="${deviceName}"',
+      "-r",
+      "${fps}",
+      "-f",
+      "mjpeg",
+      "-"
+    ]);
+
+    var ffmpeg = new FFMPEG(args);
+
+    await for (Uint8List data in _getFrames(ffmpeg.receive(), fpsCallback: fpsCallback)) {
+      yield data;
+    }
+  }
+
+  Stream<Uint8List> _receiveX11Grab(int fps, {fpsCallback(int fps)}) async* {
+    String inputName = uri.queryParameters["in"];
+
+    var args = [
+      "-f",
+      "x11grab"
+    ];
+
+    for (String qs in uri.queryParameters.keys) {
+      if (qs == "in") {
+        continue;
+      }
+
+      args.add("-${qs}");
+      if (uri.queryParameters[qs] != "true") {
+        args.add(uri.queryParameters[qs]);
+      }
+    }
+
+    args.addAll([
+      "-i",
+      inputName.toString(),
+      "-r",
+      "${fps}",
+      "-f",
+      "mjpeg",
+      "-"
+    ]);
+
+    var ffmpeg = new FFMPEG(args);
+
+    await for (Uint8List data in _getFrames(ffmpeg.receive(), fpsCallback: fpsCallback)) {
+      yield data;
+    }
+  }
+
+  Stream<Uint8List> _receiveGdiGrab(int fps, {fpsCallback(int fps)}) async* {
+    var args = [
+      "-f",
+      "gdigrab"
+    ];
+
+    String inputType = "desktop";
+
+    if (uri.queryParameters.containsKey("window")) {
+      inputType = 'title=${uri.queryParameters["window"]}';
+    }
+
+    for (String qs in uri.queryParameters.keys) {
+      if (qs == "window") {
+        continue;
+      }
+      args.add("-${qs}");
+      if (uri.queryParameters[qs] != "true") {
+        args.add(uri.queryParameters[qs]);
+      }
+    }
+
+    args.addAll([
+      "-i",
+      inputType,
+      "-r",
+      "${fps}",
+      "-f",
+      "mjpeg",
+      "-"
+    ]);
+
+    var ffmpeg = new FFMPEG(args);
+
+    await for (Uint8List data in _getFrames(ffmpeg.receive(), fpsCallback: fpsCallback)) {
+      yield data;
+    }
+  }
+
   Stream<Uint8List> _receiveVideo4Linux(int fps, {fpsCallback(int fps)}) async* {
     String deviceName = uri.path;
 
@@ -179,8 +306,40 @@ class MotionJpegClient {
     }
   }
 
+  Stream<Uint8List> _receiveFbDev(int fps, {fpsCallback(int fps)}) async* {
+    String deviceName = uri.path;
+
+    var args = [
+      "-f",
+      "fbdev"
+    ];
+
+    for (String qs in uri.queryParameters.keys) {
+      args.add("-${qs}");
+      if (uri.queryParameters[qs] != "true") {
+        args.add(uri.queryParameters[qs]);
+      }
+    }
+
+    args.addAll([
+      "-i",
+      deviceName,
+      "-r",
+      "${fps}",
+      "-f",
+      "mjpeg",
+      "-"
+    ]);
+
+    var ffmpeg = new FFMPEG(args);
+
+    await for (Uint8List data in _getFrames(ffmpeg.receive(), fpsCallback: fpsCallback)) {
+      yield data;
+    }
+  }
+
   Stream<Uint8List> _getFrames(Stream<List<int>> stream, {
-  fpsCallback(int fps)
+    fpsCallback(int fps)
   }) async* {
     var buff = new Uint8Buffer();
     var isInside = false;
